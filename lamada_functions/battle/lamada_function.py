@@ -19,8 +19,18 @@ def lambda_handler(event, context):
     
     configur = ConfigParser()
     configur.read(config_file)
+    s3_profile = 's3readwrite'
+    boto3.setup_default_session(profile_name=s3_profile)
     
-  
+    bucketname = configur.get('s3', 'bucket_name')
+    s3 = boto3.resource('s3')
+    bucket = s3.Bucket(bucketname)
+    
+    file_name = "/tmp/result.txt"
+
+   ## bucketkey_results_file = "battle_result.txt"
+
+    
     #
     # configure for RDS access
     #
@@ -46,6 +56,7 @@ def lambda_handler(event, context):
         raise Exception("requires pokemonName parameter in event")
         
     print("pokemonName:", pokemonName)
+    bucketkey_results_file = pokemonName+":battle_result.txt"
     pokemons = pokemonName.split(":")
     pokemon1 = pokemons[0]
     pokemon2  = pokemons[1]
@@ -89,7 +100,13 @@ def lambda_handler(event, context):
     '''
     poke1 = Pokemon(p1[1],p1[5],p1[6],p1[7],p1[10],p1[2])
     poke2 = Pokemon(p2[1],p2[5],p2[6],p2[7],p2[10],p2[2])
-    winner = battle(poke1,poke2)
+    winner = battle(poke1,poke2,file_name)
+    bucket.upload_file(file_name,
+                       bucketkey_results_file,
+                       ExtraArgs={
+                         'ACL': 'public-read',
+                         'ContentType': 'text/plain'
+                       })
     body ={
         "name" : winner.name,
         "hp": winner.hp
@@ -155,7 +172,10 @@ class Pokemon:
         }
         return effectiveness.get(self.type, {}).get(other_type, 1)
 
-def battle(pokemon1, pokemon2):
+def battle(pokemon1, pokemon2,file_name):
+    outfile = open(file_name, "w")
+    outfile.write("**RESULTS**\n")
+   
     if pokemon1.speed >= pokemon2.speed:
         attacker, defender = pokemon1, pokemon2
     else:
@@ -166,10 +186,12 @@ def battle(pokemon1, pokemon2):
         damage = attacker.calculate_damage(defender)
         defender.take_damage(damage)
         print(f"{attacker.name} attacks {defender.name} for {damage} damage.")
-
+        outfile.write(f"{attacker.name} attacks {defender.name} for {damage} damage.\n")
 
         attacker, defender =  defender,attacker
 
     winner = pokemon1 if pokemon2.is_defeated() else pokemon2
     print(f"{winner} wins the battle!,left hp is {winner.hp}")
+    outfile.write(f"{winner.name} wins the battle!,left hp is {winner.hp}")
+    outfile.close()
     return winner
