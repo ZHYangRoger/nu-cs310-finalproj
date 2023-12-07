@@ -75,6 +75,7 @@ def prompt():
   print("   7 => getTop10PokeMonsByAttributes")
   print("   8 => battle")
   print("   9 => create new pokemon")
+  print("   10 => get all pokemon")
   cmd = input()
 
   if cmd == "":
@@ -470,7 +471,7 @@ def createPokemon(baseurl):
 
     jobid = body
 
-    print("PDF uploaded, job id =", jobid)
+    print("ind =", jobid)
     return
 
   except Exception as e:
@@ -592,6 +593,79 @@ def get_top10pokemon_by_attributes(baseurl):
 
   except Exception as e:
     logging.error("getPokemon() failed:")
+    logging.error("url: " + url)
+    logging.error(e)
+    return
+def getAllPokemon(baseurl):
+  """
+  Prompts the user for the job id, and downloads
+  that asset (PDF).
+
+  Parameters
+  ----------
+  baseurl: baseurl for web service
+
+  Returns
+  -------
+  nothing
+  """
+
+  pageIndex = 0
+  try:
+    #
+    # call the web service:
+    #
+
+    api = '/getPokemon'
+    url = baseurl + api + '/' + str(pageIndex)
+    
+    res = requests.get(url)
+    print(res)
+    #
+    # let's look at what we got back:
+    #
+    if res.status_code != 200:
+      # failed:
+      print("Failed with status code:", res.status_code)
+      print("url: " + url)
+      if res.status_code == 400:
+        # we'll have an error message
+        body = res.json()
+        print("Error message:", body)
+      #
+      return
+
+    #
+    # deserialize and extract results:
+    #
+    body = res.json()
+    print(body)
+    print("Enter 'y' to coninue>")
+    cmd = input()
+    while cmd =='y':
+      pageIndex = pageIndex+1
+      url = baseurl + api + '/' + str(pageIndex)
+      res = requests.get(url)
+      if res.status_code != 200:
+        # failed:
+        print("Failed with status code:", res.status_code)
+        print("url: " + url)
+        if res.status_code == 400:
+          # we'll have an error message
+          body = res.json()
+          print("Error message:", body)
+        #
+        return
+      body = res.json()
+      print(body)
+      print("Enter 'y' to coninue>")
+      cmd = input()
+
+    
+    return
+
+  except Exception as e:
+    logging.error("getAllPokemon() failed:")
     logging.error("url: " + url)
     logging.error(e)
     return
@@ -790,6 +864,8 @@ try:
       battle(baseurl)
     elif cmd == 9:
       createPokemon(baseurl)
+    elif cmd == 10:
+      getAllPokemon(baseurl)
     else:
       print("** Unknown command, try again...")
     #
