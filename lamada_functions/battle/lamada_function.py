@@ -81,7 +81,10 @@ def lambda_handler(event, context):
         'statusCode': 400,
         'body': json.dumps("no such pokemonName...")
       }
-    
+    outfile = open(file_name, "w")
+    outfile.write(f"{p1}\n")
+    outfile.write(f"{p2}\n")
+    outfile.close()
     print(p1)
     print(p2)
     '''
@@ -101,6 +104,7 @@ def lambda_handler(event, context):
     poke1 = Pokemon(p1[1],p1[5],p1[6],p1[7],p1[10],p1[2])
     poke2 = Pokemon(p2[1],p2[5],p2[6],p2[7],p2[10],p2[2])
     winner = battle(poke1,poke2,file_name)
+    
     bucket.upload_file(file_name,
                        bucketkey_results_file,
                        ExtraArgs={
@@ -173,7 +177,7 @@ class Pokemon:
         return effectiveness.get(self.type, {}).get(other_type, 1)
 
 def battle(pokemon1, pokemon2,file_name):
-    outfile = open(file_name, "w")
+    outfile = open(file_name, "a")
     outfile.write("**RESULTS**\n")
    
     if pokemon1.speed >= pokemon2.speed:
