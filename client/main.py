@@ -657,6 +657,9 @@ def getAllPokemon(baseurl):
         #
         return
       body = res.json()
+      if not body or len(body) == 0:
+        print("This is the last page")
+        break
       print(body)
       print("Enter 'y' to coninue>")
       cmd = input()
