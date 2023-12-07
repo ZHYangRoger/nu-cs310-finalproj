@@ -340,15 +340,18 @@ def download(baseurl):
   nothing
   """
 
-  print("Enter job id>")
-  jobid = input()
+  print("Enter pokemon name1>")
+  pokeMonName1 = input()
+  print("Enter pokemon name2>")
+  pokeMonName2 = input()
 
   try:
     #
     # call the web service:
     #
+    pokemonName = f"{pokeMonName1}:{pokeMonName2}"
     api = '/download'
-    url = baseurl + api + '/' + jobid
+    url = baseurl + api + '/' + pokemonName
     print(url)
     res = requests.get(url)
 
