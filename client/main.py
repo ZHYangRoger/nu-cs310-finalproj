@@ -1,15 +1,6 @@
-#
-# Client-side python app for benford app, which is calling
-# a set of lambda functions in AWS through API Gateway.
-# The overall purpose of the app is to process a PDF and
-# see if the numeric values in the PDF adhere to Benford's
-# law.
-#
-# Authors:
-#   Prof. Joe Hummel
-#   Northwestern University
-#   CS 310, Project 03
-#
+# CS310 Final Project
+# Work by: Zihui Yang (zyj6631), Tiansheng Zhang (tzo4717), Yiran Mo (yme2729)
+# Some code borrowed from CS310 class projects
 
 import requests
 import jsons
@@ -25,6 +16,8 @@ from configparser import ConfigParser
 
 import matplotlib.pyplot as plt
 import matplotlib.image as img
+
+import time
 
 
 ############################################################
@@ -67,19 +60,15 @@ def prompt():
   Command number entered by user (0, 1, 2, ...)
   """
   print()
-  print(">> Enter a command:")
-  print("   0 => end")
-  print("   1 => users")
-  print("   2 => jobs")
-  print("   3 => upload")
-  print("   4 => download")
-  print("   5 => reset")
-  print("   6 => getPokeMonByName")
-  print("   7 => getTop10PokeMonsByAttributes")
-  print("   8 => battle")
-  print("   9 => create new pokemon")
-  print("   10 => get all pokemon")
-  print("   11 => get pokemon pictures")
+  print(">> Please Enter a Command:")
+  print("   0 => Exit Pokedex")
+  print("   1 => Get Pokemon Information by Name")
+  print("   2 => Get the Top 10 Pokemons by Attribute")
+  print("   3 => Create a New Pokemon")
+  print("   4 => Get All Pokemons, 10 per Table")
+  print("   5 => Get the Picture of a Pokemon")
+  print("   6 => Pokemon Battle")
+  
   cmd = input()
 
   if cmd == "":
@@ -92,262 +81,16 @@ def prompt():
   return cmd
 
 
-############################################################
-#
-# users
-#
-def users(baseurl):
-  """
-  Prints out all the users in the database
-
-  Parameters
-  ----------
-  baseurl: baseurl for web service
-
-  Returns
-  -------
-  nothing
-  """
-
-  try:
-    #
-    # call the web service:
-    #
-    api = '/users'
-    url = baseurl + api
-
-    res = requests.get(url)
-
-    #
-    # let's look at what we got back:
-    #
-    if res.status_code != 200:
-      # failed:
-      print("Failed with status code:", res.status_code)
-      print("url: " + url)
-      if res.status_code == 400:
-        # we'll have an error message
-        body = res.json()
-        print("Error message:", body)
-      #
-      return
-
-    #
-    # deserialize and extract users:
-    #
-    body = res.json()
-
-    #
-    # let's map each row into a User object:
-    #
-    users = []
-    for row in body:
-      user = User(row)
-      users.append(user)
-    #
-    # Now we can think OOP:
-    #
-    if len(users) == 0:
-      print("no users...")
-      return
-
-    for user in users:
-      print(user.userid)
-      print(" ", user.username)
-      print(" ", user.pwdhash)
-    #
-    return
-
-  except Exception as e:
-    logging.error("users() failed:")
-    logging.error("url: " + url)
-    logging.error(e)
-    return
-
-
-############################################################
-#
-# jobs
-#
-def jobs(baseurl):
-  """
-  Prints out all the jobs in the database
-
-  Parameters
-  ----------
-  baseurl: baseurl for web service
-
-  Returns
-  -------
-  nothing
-  """
-
-  try:
-    #
-    # call the web service:
-    #
-    api = '/jobs'
-    url = baseurl + api
-
-    res = requests.get(url)
-
-    #
-    # let's look at what we got back:
-    #
-    if res.status_code != 200:
-      # failed:
-      print("Failed with status code:", res.status_code)
-      print("url: " + url)
-      if res.status_code == 400:
-        # we'll have an error message
-        body = res.json()
-        print("Error message:", body)
-      #
-      return
-
-    #
-    # deserialize and extract jobs:
-    #
-    body = res.json()
-    #
-    # let's map each row into an Job object:
-    #
-    jobs = []
-    for row in body:
-      job = Job(row)
-      jobs.append(job)
-    #
-    # Now we can think OOP:
-    #
-    if len(jobs) == 0:
-      print("no jobs...")
-      return
-
-    for job in jobs:
-      print(job.jobid)
-      print(" ", job.userid)
-      print(" ", job.status)
-      print(" ", job.originaldatafile)
-      print(" ", job.datafilekey)
-      print(" ", job.resultsfilekey)
-    #
-    return
-
-  except Exception as e:
-    logging.error("jobs() failed:")
-    logging.error("url: " + url)
-    logging.error(e)
-    return
-
-
-############################################################
-#
-# upload
-#
-def upload(baseurl):
-  """
-  Prompts the user for a local filename and user id, 
-  and uploads that asset (PDF) to S3 for processing. 
-
-  Parameters
-  ----------
-  baseurl: baseurl for web service
-
-  Returns
-  -------
-  nothing
-  """
-
-  print("Enter PDF filename>")
-  local_filename = input()
-
-  if not pathlib.Path(local_filename).is_file():
-    print("PDF file '", local_filename, "' does not exist...")
-    return
-
-  print("Enter user id>")
-  userid = input()
-
-  try:
-    #
-    # build the data packet:
-    #
-    infile = open(local_filename, "rb")
-    bytes = infile.read()
-    infile.close()
-
-    #
-    # now encode the pdf as base64. Note b64encode returns
-    # a bytes object, not a string. So then we have to convert
-    # (decode) the bytes -> string, and then we can serialize
-    # the string as JSON for upload to server:
-    #
-    data = base64.b64encode(bytes)
-    datastr = data.decode()
-
-    data = {"filename": local_filename, "data": datastr}
-
-    #
-    # call the web service:
-    #
-    api = '/upload'
-    url = baseurl + api + "/" + userid
-
-    res = requests.post(url, json=data)
-
-    #
-    # let's look at what we got back:
-    #
-    if res.status_code != 200:
-      # failed:
-      print("Failed with status code:", res.status_code)
-      print("url: " + url)
-      if res.status_code == 400:
-        # we'll have an error message
-        body = res.json()
-        print("Error message:", body)
-      #
-      return
-
-    #
-    # success, extract jobid:
-    #
-    body = res.json()
-
-    jobid = body
-
-    print("PDF uploaded, job id =", jobid)
-    return
-
-  except Exception as e:
-    logging.error("upload() failed:")
-    logging.error("url: " + url)
-    logging.error(e)
-    return
-
-
-############################################################
-#
-# download
-#
-def download(baseurl):
-  """
-  Prompts the user for the job id, and downloads
-  that asset (PDF).
-
-  Parameters
-  ----------
-  baseurl: baseurl for web service
-
-  Returns
-  -------
-  nothing
-  """
-  
-  print("Enter pokemon name1>")
+def battle(baseurl):
+  print("Enter pokemon name1 >")
   pokeMonName1 = input()
-  print("Enter pokemon name2>")
+  print("Enter pokemon name2 >")
   pokeMonName2 = input()
+
+  print()
+  print("Battle Simulator Starting...")
+
+  start_battle(pokeMonName1, pokeMonName2)
 
   try:
     #
@@ -356,14 +99,19 @@ def download(baseurl):
     pokemonName = f"{pokeMonName1}:{pokeMonName2}"
     api = '/download'
     url = baseurl + api + '/' + pokemonName
-    print(url)
+    # print(url)
+    time.sleep(1)
     res = requests.get(url)
-
     #
     # let's look at what we got back:
     #
+    i = 0
+    while res.status_code != 200 and i < 10:
+      res = requests.get(url)
+      time.sleep(0.5)
+      i += 1
+      
     if res.status_code != 200:
-      # failed:
       print("Failed with status code:", res.status_code)
       print("url: " + url)
       if res.status_code == 400:
@@ -384,7 +132,24 @@ def download(baseurl):
     bytes = base64.b64decode(base64_bytes)
     results = bytes.decode()
 
-    print(results)
+    print()
+    print(f"{pokeMonName1} vs. {pokeMonName2}")
+    time.sleep(1)
+    print("Battle Starts!")
+    print()
+
+    lines = results.split("\n")
+
+    i = 3
+    while i < len(lines):
+      time.sleep(0.5)
+      if i == len(lines) - 1:
+        print()
+        print(f"RESULT: {lines[i]}")
+      else:
+        print(lines[i])
+      i += 1
+      
     return
 
   except Exception as e:
@@ -395,40 +160,28 @@ def download(baseurl):
 
 
 def createPokemon(baseurl):
-  """
-  Prompts the user for a local filename and user id, 
-  and uploads that asset (PDF) to S3 for processing. 
 
-  Parameters
-  ----------
-  baseurl: baseurl for web service
-
-  Returns
-  -------
-  nothing
-  """
-
-  print("Enter name>")
+  print("Enter name >")
   name = input()
-  print("Enter Type1>")
+  print("Enter first type >")
   type1 = input()
-  print("Enter Type2>")
+  print("Enter second type >")
   type2 = input()
-  print("Enter Total>")
+  print("Enter Total CP point>")
   total = input()
-  print("Enter HP>")
+  print("Enter HP >")
   hp = input()
-  print("Enter Attack>")
+  print("Enter Attack >")
   attack = input()
-  print("Enter Defense>")
+  print("Enter Defense >")
   defense = input()
-  print("Enter Sp_Atk>")
+  print("Enter Special Attack >")
   sp_atk = input()
-  print("Enter Sp_Def>")
+  print("Enter Special Defsnse >")
   sp_def = input()
-  print("Enter Speed>")
+  print("Enter Speed >")
   speed = input()
-  print("Enter Generation>")
+  print("Enter Generation >")
   generation = input()
 
   try:
@@ -476,7 +229,11 @@ def createPokemon(baseurl):
 
     jobid = body
 
-    print("ind =", jobid)
+    # print("ind =", jobid)
+    pokelist = [["null", name, type1, type2, total, hp, attack, defense, sp_atk, sp_def, speed, generation, False]]
+    print()
+    print("You have successfully created the following pokemon:")
+    format_pokemon(pokelist)
     return
 
   except Exception as e:
@@ -487,20 +244,8 @@ def createPokemon(baseurl):
 
 
 def get_pokemon_by_name(baseurl):
-  """
-  Prompts the user for the job id, and downloads
-  that asset (PDF).
-
-  Parameters
-  ----------
-  baseurl: baseurl for web service
-
-  Returns
-  -------
-  nothing
-  """
-
-  print("Enter pokemon name>")
+  
+  print("Enter a pokemon name >")
   pokemonName = input()
 
   try:
@@ -509,7 +254,7 @@ def get_pokemon_by_name(baseurl):
     #
     api = '/pokemon'
     url = baseurl + api + '/' + pokemonName
-    print(url)
+    # print(url)
     res = requests.get(url)
 
     #
@@ -517,12 +262,12 @@ def get_pokemon_by_name(baseurl):
     #
     if res.status_code != 200:
       # failed:
-      print("Failed with status code:", res.status_code)
-      print("url: " + url)
+      # print("Failed with status code:", res.status_code)
+      # print("url: " + url)
       if res.status_code == 400:
         # we'll have an error message
         body = res.json()
-        print("Error message:", body)
+        print("No such pokemon...")
       #
       return
 
@@ -531,7 +276,35 @@ def get_pokemon_by_name(baseurl):
     #
     body = res.json()
 
-    print(body)
+    print(f"Pokemon ID: {body[0]}")
+    print(f"Pokemon Name: {body[1]}")
+    print(f"Pokemon First Element: {body[2]}")
+    if len(body[3]) > 0:
+      print(f"Pokemon Second Element: {body[3]}")
+    else:
+      print("Pokemon Second Element: None")
+    print(f"Overall Combat Power (CP) Score: {body[4]}")
+    print(f"HP: {body[5]}")
+    print(f"Attack Strength: {body[6]}")
+    print(f"Defense Strength: {body[7]}")
+    print(f"Special Attack Strength: {body[8]}")
+    print(f"Special Defense Strength: {body[9]}")
+    print(f"Speed: {body[10]}")
+    print(f"Generation: {body[11]}")
+    if body[12] > 0:
+      print("Legendary: True")
+    else:
+      print("Legendary: False")
+
+    print()
+    time.sleep(1)
+    print("Do you want to download a picture of it? (y/n)")
+
+    choice = input()
+    if choice == "y":
+      getPicture(baseurl, pokemonName)
+    
+    # print(body)
     return
 
   except Exception as e:
@@ -542,28 +315,19 @@ def get_pokemon_by_name(baseurl):
 
 
 def get_top10pokemon_by_attributes(baseurl):
-  """
-  Prompts the user for the job id, and downloads
-  that asset (PDF).
 
-  Parameters
-  ----------
-  baseurl: baseurl for web service
-
-  Returns
-  -------
-  nothing
-  """
-
-  print("Selet attribute you want to get>")
+  print("Selet the attribute >")
   print("1 -> Total")
   print("2 -> HP")
   print("3 -> Attack")
   print("4 -> Defense")
-  print("5 -> Sp_Atk")
-  print("6 -> Sp_Def")
+  print("5 -> Special Attack")
+  print("6 -> Special Defense")
   print("7 -> Speed")
   cmd = input()
+  if int(cmd) < 1 or int(cmd) > 7:
+    print("Invalid option...")
+    return
   attributeList = [
     "Total", "HP", "Attack", "Defense", "Sp_Atk", "Sp_Def", "Speed"
   ]
@@ -574,7 +338,7 @@ def get_top10pokemon_by_attributes(baseurl):
     attribute = attributeList[int(cmd) - 1]
     api = '/top10'
     url = baseurl + api + '/' + attribute
-    print(url)
+    # print(url)
     res = requests.get(url)
 
     #
@@ -595,8 +359,9 @@ def get_top10pokemon_by_attributes(baseurl):
     # deserialize and extract results:
     #
     body = res.json()
-
-    print(body)
+    print()
+    for index, pokemon in enumerate(body):
+      print(f"{index + 1}: {pokemon[1]}")
     return
 
   except Exception as e:
@@ -605,21 +370,27 @@ def get_top10pokemon_by_attributes(baseurl):
     logging.error(e)
     return
 
+def format_pokemon(pokelist):
+  headers = ["Index", "Name", "Element 1", "Element 2", "CP", "HP", "Attack", "Defense", "Special Attack", "Special Defense", "Speed", "Generation", "Legendary"]
+
+  column_widths = [len(header) for header in headers]
+  for row in pokelist:
+      for i, item in enumerate(row):
+          column_widths[i] = max(column_widths[i], len(str(item)))
+
+  divider = '+' + '+'.join('-' * (width + 2) for width in column_widths) + '+'
+
+  header_row = '|' + '|'.join(f' {header.ljust(column_widths[i])} ' for i, header in enumerate(headers)) + '|'
+
+  table = divider + '\n' + header_row + '\n' + divider + '\n'
+
+  for row in pokelist:
+      formatted_row = '|' + '|'.join(f' {str(item).ljust(column_widths[i])} ' for i, item in enumerate(row)) + '|'
+      table += formatted_row + '\n' + divider + '\n'
+
+  print(table)
 
 def getAllPokemon(baseurl):
-  """
-  Prompts the user for the job id, and downloads
-  that asset (PDF).
-
-  Parameters
-  ----------
-  baseurl: baseurl for web service
-
-  Returns
-  -------
-  nothing
-  """
-
   pageIndex = 0
   try:
     #
@@ -648,8 +419,10 @@ def getAllPokemon(baseurl):
     #
     # deserialize and extract results:
     #
+    print("Please ensure that the window is wide enough to fit the table")
     body = res.json()
-    print(body)
+    format_pokemon(body)
+    print()
     print("Enter 'y' to coninue>")
     cmd = input()
     while cmd == 'y':
@@ -670,7 +443,8 @@ def getAllPokemon(baseurl):
       if not body or len(body) == 0:
         print("This is the last page")
         break
-      print(body)
+      format_pokemon(body)
+      print()
       print("Enter 'y' to coninue>")
       cmd = input()
 
@@ -683,26 +457,7 @@ def getAllPokemon(baseurl):
     return
 
 
-def battle(baseurl):
-  """
-  Prompts the user for the job id, and downloads
-  that asset (PDF).
-
-  Parameters
-  ----------
-  baseurl: baseurl for web service
-
-  Returns
-  -------
-  nothing
-  """
-
-  print("Enter the first pokemon name>")
-
-  pokemon1 = input()
-  print("Enter the second pokemon name>")
-  pokemon2 = input()
-
+def start_battle(pokemon1, pokemon2):
   try:
     #
     # call the web service:
@@ -711,7 +466,7 @@ def battle(baseurl):
 
     api = '/battle'
     url = baseurl + api + '/' + pokemonName
-    print(url)
+    # print(url)
     res = requests.get(url)
 
     #
@@ -733,7 +488,7 @@ def battle(baseurl):
     #
     body = res.json()
 
-    print(body)
+    # print(body)
     return
 
   except Exception as e:
@@ -743,23 +498,11 @@ def battle(baseurl):
     return
 
 
-def getPicture(baseurl):
-  """
-  Prompts the user for the job id, and downloads
-  that asset (PDF).
+def getPicture(baseurl, pokemonName="None"):
 
-  Parameters
-  ----------
-  baseurl: baseurl for web service
-
-  Returns
-  -------
-  nothing
-  """
-
-  print("Enter the pokemon name>")
-
-  pokemonName = input()
+  if pokemonName == "None":
+    print("Enter the pokemon name >")
+    pokemonName = input()
 
   try:
     #
@@ -768,7 +511,7 @@ def getPicture(baseurl):
 
     api = '/getPicture'
     url = baseurl + api + '/' + pokemonName
-    print(url)
+    # print(url)
     res = requests.get(url)
 
     #
@@ -791,13 +534,14 @@ def getPicture(baseurl):
 
     base64_image = res.json()
 
-    # 解码 Base64 字符串
     image_data = base64.b64decode(base64_image)
     filename = pokemonName + ".jpg"
     with open(filename, "wb") as file:
       file.write(image_data)
     image = img.imread(filename)
     plt.imshow(image)
+    print()
+    print("Image downloaded. Go check it out!")
     plt.show()
     return
 
@@ -808,68 +552,12 @@ def getPicture(baseurl):
     return
 
 
-############################################################
-#
-# reset
-#
-def reset(baseurl):
-  """
-  Resets the database back to initial state.
-
-  Parameters
-  ----------
-  baseurl: baseurl for web service
-
-  Returns
-  -------
-  nothing
-  """
-
-  try:
-    #
-    # call the web service:
-    #
-    api = '/reset'
-    url = baseurl + api
-
-    res = requests.delete(url)
-
-    #
-    # let's look at what we got back:
-    #
-    if res.status_code != 200:
-      # failed:
-      print("Failed with status code:", res.status_code)
-      print("url: " + url)
-      if res.status_code == 400:
-        # we'll have an error message
-        body = res.json()
-        print("Error message:", body)
-      #
-      return
-
-    #
-    # deserialize and print message
-    #
-    body = res.json()
-
-    msg = body
-
-    print(msg)
-    return
-
-  except Exception as e:
-    logging.error("reset() failed:")
-    logging.error("url: " + url)
-    logging.error(e)
-    return
-
 
 ############################################################
 # main
 #
 try:
-  print('** Welcome to BenfordApp **')
+  print('** Welcome to Pokedex, a Tool for Pokemon Searching, Creating, and Battling! **')
   print()
 
   # eliminate traceback so we just get error message:
@@ -880,15 +568,15 @@ try:
   #
   config_file = 'pokemon-client-config.ini'
 
-  print("Config file to use for this session?")
-  print("Press ENTER to use default, or")
-  print("enter config file name>")
-  s = input()
+  # print("Config file to use for this session?")
+  # print("Press ENTER to use default, or")
+  # print("enter config file name>")
+  # s = input()
 
-  if s == "":  # use default
-    pass  # already set
-  else:
-    config_file = s
+  # if s == "":  # use default
+  #   pass  # already set
+  # else:
+  #   config_file = s
 
   #
   # does config file exist?
@@ -927,29 +615,19 @@ try:
   while cmd != 0:
     #
     if cmd == 1:
-      users(baseurl)
-    elif cmd == 2:
-      jobs(baseurl)
-    elif cmd == 3:
-      upload(baseurl)
-    elif cmd == 4:
-      download(baseurl)
-    elif cmd == 5:
-      reset(baseurl)
-    elif cmd == 6:
       get_pokemon_by_name(baseurl)
-    elif cmd == 7:
+    elif cmd == 2:
       get_top10pokemon_by_attributes(baseurl)
-    elif cmd == 8:
-      battle(baseurl)
-    elif cmd == 9:
+    elif cmd == 3:
       createPokemon(baseurl)
-    elif cmd == 10:
+    elif cmd == 4:
       getAllPokemon(baseurl)
-    elif cmd == 11:
+    elif cmd == 5:
       getPicture(baseurl)
+    elif cmd == 6:
+      battle(baseurl)
     else:
-      print("** Unknown command, try again...")
+      print("** Unknown command. Please try again...")
     #
     cmd = prompt()
 
@@ -957,7 +635,7 @@ try:
   # done
   #
   print()
-  print('** done **')
+  print('** Pokedex exited. Hope you had fun! **')
   sys.exit(0)
 
 except Exception as e:
